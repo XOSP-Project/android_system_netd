@@ -90,12 +90,12 @@ int NatController::setupIptablesHooks() {
          * This is for tethering counters.
          * This chain is reached via --goto, and then RETURNS.
          */
-        {{IPTABLES_PATH, "-w", "-W", IPTABLES_RETRY_INTERVAL, "-F", LOCAL_TETHER_COUNTERS_CHAIN,}, 0},
-        {{IP6TABLES_PATH, "-w", "-W", IPTABLES_RETRY_INTERVAL, "-F", LOCAL_TETHER_COUNTERS_CHAIN,}, 0},
-        {{IPTABLES_PATH, "-w", "-W", IPTABLES_RETRY_INTERVAL, "-X", LOCAL_TETHER_COUNTERS_CHAIN,}, 0},
-        {{IP6TABLES_PATH, "-w", "-W", IPTABLES_RETRY_INTERVAL, "-X", LOCAL_TETHER_COUNTERS_CHAIN,}, 0},
-        {{IPTABLES_PATH, "-w", "-W", IPTABLES_RETRY_INTERVAL, "-N", LOCAL_TETHER_COUNTERS_CHAIN,}, 1},
-        {{IP6TABLES_PATH, "-w", "-W", IPTABLES_RETRY_INTERVAL, "-N", LOCAL_TETHER_COUNTERS_CHAIN,}, 1},
+        {{IPTABLES_PATH, "-w", "-F", LOCAL_TETHER_COUNTERS_CHAIN,}, 0},
+        {{IP6TABLES_PATH, "-w", "-F", LOCAL_TETHER_COUNTERS_CHAIN,}, 0},
+        {{IPTABLES_PATH, "-w", "-X", LOCAL_TETHER_COUNTERS_CHAIN,}, 0},
+        {{IP6TABLES_PATH, "-w", "-X", LOCAL_TETHER_COUNTERS_CHAIN,}, 0},
+        {{IPTABLES_PATH, "-w", "-N", LOCAL_TETHER_COUNTERS_CHAIN,}, 1},
+        {{IP6TABLES_PATH, "-w", "-N", LOCAL_TETHER_COUNTERS_CHAIN,}, 1},
 
         /*
          * Second chain is used to limit downstream mss to the upstream pmtu
@@ -106,9 +106,8 @@ int NatController::setupIptablesHooks() {
          * Bug 17629786 asks to make the failure more obvious, or even fatal
          * so that all builds eventually gain the performance improvement.
          */
-        {{IPTABLES_PATH, "-w", "-W", IPTABLES_RETRY_INTERVAL, "-t", "mangle", "-A",
-                LOCAL_MANGLE_FORWARD, "-p", "tcp", "--tcp-flags",
-                "SYN", "SYN", "-j", "TCPMSS", "--clamp-mss-to-pmtu"}, 0},
+        {{IPTABLES_PATH, "-w", "-t", "mangle", "-A", LOCAL_MANGLE_FORWARD, "-p", "tcp",
+                "--tcp-flags", "SYN", "SYN", "-j", "TCPMSS", "--clamp-mss-to-pmtu"}, 0},
     };
     for (unsigned int cmdNum = 0; cmdNum < ARRAY_SIZE(defaultCommands); cmdNum++) {
         if (runCmd(ARRAY_SIZE(defaultCommands[cmdNum].cmd), defaultCommands[cmdNum].cmd) &&
@@ -129,11 +128,11 @@ int NatController::setDefaults() {
      *  - internally it will be memcopied to an array and terminated with a NULL.
      */
     struct CommandsAndArgs defaultCommands[] = {
-        {{IPTABLES_PATH, "-w", "-W", IPTABLES_RETRY_INTERVAL, "-F", LOCAL_FORWARD,}, 1},
-        {{IP6TABLES_PATH, "-w", "-W", IPTABLES_RETRY_INTERVAL, "-F", LOCAL_FORWARD,}, 1},
-        {{IPTABLES_PATH, "-w", "-W", IPTABLES_RETRY_INTERVAL, "-A", LOCAL_FORWARD, "-j", "DROP"}, 1},
-        {{IPTABLES_PATH, "-w", "-W", IPTABLES_RETRY_INTERVAL, "-t", "nat", "-F", LOCAL_NAT_POSTROUTING}, 1},
-        {{IP6TABLES_PATH, "-w", "-W", IPTABLES_RETRY_INTERVAL, "-t", "raw", "-F", LOCAL_RAW_PREROUTING}, 1},
+        {{IPTABLES_PATH, "-w", "-F", LOCAL_FORWARD,}, 1},
+        {{IP6TABLES_PATH, "-w", "-F", LOCAL_FORWARD,}, 1},
+        {{IPTABLES_PATH, "-w", "-A", LOCAL_FORWARD, "-j", "DROP"}, 1},
+        {{IPTABLES_PATH, "-w", "-t", "nat", "-F", LOCAL_NAT_POSTROUTING}, 1},
+        {{IP6TABLES_PATH, "-w", "-t", "raw", "-F", LOCAL_RAW_PREROUTING}, 1},
     };
     for (unsigned int cmdNum = 0; cmdNum < ARRAY_SIZE(defaultCommands); cmdNum++) {
         if (runCmd(ARRAY_SIZE(defaultCommands[cmdNum].cmd), defaultCommands[cmdNum].cmd) &&
@@ -167,8 +166,6 @@ int NatController::enableNat(const char* intIface, const char* extIface) {
         const char *v4Cmd[] = {
                 IPTABLES_PATH,
                 "-w",
-                "-W",
-                IPTABLES_RETRY_INTERVAL,
                 "-t",
                 "nat",
                 "-A",
@@ -183,8 +180,8 @@ int NatController::enableNat(const char* intIface, const char* extIface) {
          * IPv6 tethering doesn't need the state-based conntrack rules, so
          * it unconditionally jumps to the tether counters chain all the time.
          */
-        const char *v6Cmd[] = {IP6TABLES_PATH, "-w", "-W", IPTABLES_RETRY_INTERVAL,
-                               "-A", LOCAL_FORWARD, "-g", LOCAL_TETHER_COUNTERS_CHAIN};
+        const char *v6Cmd[] = {IP6TABLES_PATH, "-w", "-A", LOCAL_FORWARD,
+                               "-g", LOCAL_TETHER_COUNTERS_CHAIN};
 
         if (runCmd(ARRAY_SIZE(v4Cmd), v4Cmd) || runCmd(ARRAY_SIZE(v6Cmd), v6Cmd)) {
             ALOGE("Error setting postroute rule: iface=%s", extIface);
@@ -207,8 +204,6 @@ int NatController::enableNat(const char* intIface, const char* extIface) {
     const char *cmd1[] = {
             IPTABLES_PATH,
             "-w",
-            "-W",
-            IPTABLES_RETRY_INTERVAL,
             "-D",
             LOCAL_FORWARD,
             "-j",
@@ -218,8 +213,6 @@ int NatController::enableNat(const char* intIface, const char* extIface) {
     const char *cmd2[] = {
             IPTABLES_PATH,
             "-w",
-            "-W",
-            IPTABLES_RETRY_INTERVAL,
             "-A",
             LOCAL_FORWARD,
             "-j",
@@ -258,14 +251,12 @@ int NatController::setTetherCountingRules(bool add, const char *intIface, const 
     }
     const char *cmd2b[] = {
         IPTABLES_PATH,
-        "-w", "-W", IPTABLES_RETRY_INTERVAL, "-A", LOCAL_TETHER_COUNTERS_CHAIN,
-        "-i", intIface, "-o", extIface, "-j", "RETURN"
+        "-w", "-A", LOCAL_TETHER_COUNTERS_CHAIN, "-i", intIface, "-o", extIface, "-j", "RETURN"
     };
 
     const char *cmd2c[] = {
         IP6TABLES_PATH,
-        "-w", "-W", IPTABLES_RETRY_INTERVAL, "-A", LOCAL_TETHER_COUNTERS_CHAIN,
-        "-i", intIface, "-o", extIface, "-j", "RETURN"
+        "-w", "-A", LOCAL_TETHER_COUNTERS_CHAIN, "-i", intIface, "-o", extIface, "-j", "RETURN"
     };
 
     if (runCmd(ARRAY_SIZE(cmd2b), cmd2b) || runCmd(ARRAY_SIZE(cmd2c), cmd2c)) {
@@ -283,14 +274,12 @@ int NatController::setTetherCountingRules(bool add, const char *intIface, const 
 
     const char *cmd3b[] = {
         IPTABLES_PATH,
-        "-w", "-W", IPTABLES_RETRY_INTERVAL, "-A", LOCAL_TETHER_COUNTERS_CHAIN,
-        "-i", extIface, "-o", intIface, "-j", "RETURN"
+        "-w", "-A", LOCAL_TETHER_COUNTERS_CHAIN, "-i", extIface, "-o", intIface, "-j", "RETURN"
     };
 
     const char *cmd3c[] = {
         IP6TABLES_PATH,
-        "-w", "-W", IPTABLES_RETRY_INTERVAL, "-A", LOCAL_TETHER_COUNTERS_CHAIN,
-        "-i", extIface, "-o", intIface, "-j", "RETURN"
+        "-w", "-A", LOCAL_TETHER_COUNTERS_CHAIN, "-i", extIface, "-o", intIface, "-j", "RETURN"
     };
 
     if (runCmd(ARRAY_SIZE(cmd3b), cmd3b) || runCmd(ARRAY_SIZE(cmd3c), cmd3c)) {
@@ -307,8 +296,6 @@ int NatController::setForwardRules(bool add, const char *intIface, const char *e
     const char *cmd1[] = {
             IPTABLES_PATH,
             "-w",
-            "-W",
-            IPTABLES_RETRY_INTERVAL,
             add ? "-A" : "-D",
             LOCAL_FORWARD,
             "-i",
@@ -331,8 +318,6 @@ int NatController::setForwardRules(bool add, const char *intIface, const char *e
     const char *cmd2[] = {
             IPTABLES_PATH,
             "-w",
-            "-W",
-            IPTABLES_RETRY_INTERVAL,
             add ? "-A" : "-D",
             LOCAL_FORWARD,
             "-i",
@@ -350,8 +335,6 @@ int NatController::setForwardRules(bool add, const char *intIface, const char *e
     const char *cmd3[] = {
             IPTABLES_PATH,
             "-w",
-            "-W",
-            IPTABLES_RETRY_INTERVAL,
             add ? "-A" : "-D",
             LOCAL_FORWARD,
             "-i",
@@ -365,8 +348,6 @@ int NatController::setForwardRules(bool add, const char *intIface, const char *e
     const char *cmd4[] = {
             IP6TABLES_PATH,
             "-w",
-            "-W",
-            IPTABLES_RETRY_INTERVAL,
             "-t",
             "raw",
             add ? "-A" : "-D",
@@ -408,13 +389,13 @@ int NatController::setForwardRules(bool add, const char *intIface, const char *e
     return 0;
 
 err_rpfilter:
-    cmd3[4] = "-D";
+    cmd3[2] = "-D";
     runCmd(ARRAY_SIZE(cmd3), cmd3);
 err_return:
-    cmd2[4] = "-D";
+    cmd2[2] = "-D";
     runCmd(ARRAY_SIZE(cmd2), cmd2);
 err_invalid_drop:
-    cmd1[4] = "-D";
+    cmd1[2] = "-D";
     runCmd(ARRAY_SIZE(cmd1), cmd1);
     return rc;
 }

@@ -238,11 +238,7 @@ int BandwidthController::runIptablesCmd(const char *cmd, IptJumpOp jumpHandling,
         break;
     }
 
-    std::string iptOpts = " -w";
-    iptOpts += " -W ";
-    iptOpts += IPTABLES_RETRY_INTERVAL;
-    iptOpts += " ";
-    fullCmd.insert(0, iptOpts);
+    fullCmd.insert(0, " -w ");
     fullCmd.insert(0, iptVer == IptIpV4 ? IPTABLES_PATH : IP6TABLES_PATH);
 
     if (StrncpyAndCheck(buffer, fullCmd.c_str(), sizeof(buffer))) {
@@ -1348,8 +1344,7 @@ std::string getTetherStatsCommand(const char *binary) {
      * preloaded/linked, and require apparently a lot of wrapper code to get
      * the wanted info.
      */
-    return android::base::StringPrintf("%s -nvx -w -W %s -L %s", binary,
-                                       IPTABLES_RETRY_INTERVAL,
+    return android::base::StringPrintf("%s -nvx -w -L %s", binary,
                                        NatController::LOCAL_TETHER_COUNTERS_CHAIN);
 }
 
@@ -1397,10 +1392,7 @@ void BandwidthController::flushExistingCostlyTables(bool doClean) {
 
     /* Only lookup ip4 table names as ip6 will have the same tables ... */
     fullCmd = IPTABLES_PATH;
-    fullCmd += " -w";
-    fullCmd += " -W ";
-    fullCmd += IPTABLES_RETRY_INTERVAL;
-    fullCmd += " -S";
+    fullCmd += " -w -S";
     iptOutput = popenFunction(fullCmd.c_str(), "r");
     if (!iptOutput) {
             ALOGE("Failed to run %s err=%s", fullCmd.c_str(), strerror(errno));
